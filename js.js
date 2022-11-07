@@ -1,29 +1,53 @@
 // Doi tuong validator
 
 function Validator(options) {
+  function getParent(element, selector) {
+    while (element.parentElement) {
+      if (element.parentElement.matches(selector)) {
+        return element.parentElement;
+      }
+      element = element.parentElement;
+    }
+  }
+
   var selectorRules = {};
 
   // Ham thuc hien validate
   function validate(inputElement, rule) {
+    // var errorElement = getParent(inputElement, '.form-group')
     var errorMessage;
-    var errorElement = inputElement.parentElement.querySelector(
-      options.errorSelector
-    );
+    var errorElement = getParent(
+      inputElement,
+      options.formGroupSelector
+    ).querySelector(options.errorSelector);
 
     //Lay ra cac rule cua selector
     var rules = selectorRules[rule.selector];
 
     for (var i = 0; i < rules.length; i++) {
-      errorMessage = rules[i](inputElement.value);
+      switch (inputElement.type) {
+        case "checkbox":
+        case "radio":
+          errorMessage = rules[i](
+            formElement.querySelector(rule.selector + ":checked")
+          );
+          break;
+        default:
+          errorMessage = rules[i](inputElement.value);
+      }
       if (errorMessage) break;
     }
 
     if (errorMessage) {
       errorElement.innerText = errorMessage;
-      inputElement.parentElement.classList.add("invalid");
+      getParent(inputElement, options.formGroupSelector).classList.add(
+        "invalid"
+      );
     } else {
       errorElement.innerText = "";
-      inputElement.parentElement.classList.remove("invalid");
+      getParent(inputElement, options.formGroupSelector).classList.remove(
+        "invalid"
+      );
     }
 
     return !errorMessage;
@@ -58,7 +82,30 @@ function Validator(options) {
             values,
             input
           ) {
-            return (values[input.name] = input.value) && values;
+            switch (input.type) {
+              case "radio":
+                if (input.matches(":checked")) {
+                  values[input.name] = input.value;
+                }
+                break;
+              case "checkbox":
+                if (!input.matches(":checked")) {
+                  values[input.name] = [];
+                  return values;
+                }
+                if (!Array.isArray(values[input.name])) {
+                  values[input.name] = [];
+                }
+                values[input.name].push(input.value);
+                break;
+              case "file":
+                values[input.name] = input.files;
+                break;
+              default:
+                values[input.name] = input.value;
+            }
+
+            return values;
           },
           {});
 
@@ -80,22 +127,25 @@ function Validator(options) {
         selectorRules[rule.selector] = [rule.test];
       }
 
-      var inputElement = formElement.querySelector(rule.selector);
-      if (inputElement) {
-        // Xu ly truong hop blur khoi input
-        inputElement.onblur = function () {
-          validate(inputElement, rule);
-        };
+      var inputElements = formElement.querySelectorAll(rule.selector);
 
-        //Xu ly moi khi nguoi dung nhap vao input
-        inputElement.oninput = function () {
-          var errorElement = inputElement.parentElement.querySelector(
-            options.errorSelector
-          );
-          errorElement.innerText = "";
-          inputElement.parentElement.classList.remove("invalid");
-        };
-      }
+      Array.from(inputElements).forEach(function (inputElement) {
+        if (inputElement) {
+          // Xu ly truong hop blur khoi input
+          inputElement.onblur = function () {
+            validate(inputElement, rule);
+          };
+
+          //Xu ly moi khi nguoi dung nhap vao input
+          inputElement.oninput = function () {
+            var errorElement = inputElement.parentElement.querySelector(
+              options.errorSelector
+            );
+            errorElement.innerText = "";
+            inputElement.parentElement.classList.remove("invalid");
+          };
+        }
+      });
     });
   }
 }
@@ -107,7 +157,7 @@ Validator.isRequired = function (selector, message) {
   return {
     selector,
     test: function (value) {
-      return value.trim() ? undefined : message || "Vui long nhap truong nay";
+      return value ? undefined : message || "Vui long nhap truong nay";
     }
   };
 };
@@ -143,26 +193,3 @@ Validator.isConfirmed = function (selector, getConfirmValue, message) {
     }
   };
 };
-
-Validator({
-  form: "#form-1",
-  errorSelector: ".form-message",
-  rules: [
-    Validator.isRequired("#fullname", "Vui long nhap ten day du cua ban"),
-    Validator.isRequired("#email"),
-    Validator.isEmail("#email"),
-    Validator.minLength("#password", 6),
-    Validator.isRequired("#password_confirmation"),
-    Validator.isConfirmed(
-      "#password_confirmation",
-      function () {
-        return document.querySelector("#form-1 #password").value;
-      },
-      "Mat khau nhap lai khong chinh xac"
-    )
-  ],
-  onSubmit: function (data) {
-    //call API
-    console.log(data);
-  }
-});
